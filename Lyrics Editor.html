@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Lyrics Step Editor</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #0b0f19; color: #f1f5f9; padding: 16px; min-height: 100vh; display: flex; flex-direction: column; }
+    
+    .view-card { display: none; flex-direction: column; width: 100%; max-width: 600px; margin: 0 auto; flex: 1; }
+    .view-card.active { display: flex; }
+
+    .header { text-align: center; margin-bottom: 16px; }
+    .header h2 { font-size: 1.25rem; color: #38bdf8; font-weight: 700; }
+    .header p { font-size: 0.85rem; color: #94a3b8; margin-top: 4px; }
+
+    /* Step 1: Input Page */
+    .input-wrapper { flex: 1; display: flex; flex-direction: column; margin-bottom: 16px; }
+    #rawInput {
+      width: 100%; height: 68vh; background: #1e293b; color: #fff;
+      border: 1px solid #334155; border-radius: 12px; padding: 14px;
+      font-size: 15px; line-height: 1.5; resize: none; outline: none;
+    }
+    #rawInput:focus { border-color: #38bdf8; }
+
+    /* Step 2: Table Edit Page */
+    .table-scroll {
+      flex: 1;
+      max-height: calc(100vh - 160px);
+      overflow-y: auto;
+      border-radius: 12px;
+      border: 1px solid #334155;
+      background: #111827;
+      margin-bottom: 85px; /* Floating Bar မကွယ်စေရန် အောက်ခြေနေရာချန်ထားခြင်း */
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #1e293b; color: #94a3b8; padding: 10px 8px; font-size: 12px; position: sticky; top: 0; z-index: 10; text-align: left; }
+    td { padding: 8px; border-bottom: 1px solid #1f2937; }
+    
+    .col-num { width: 35px; text-align: center; color: #38bdf8; font-weight: bold; font-size: 13px; vertical-align: middle; }
+    .cell-inputs { display: flex; flex-direction: column; gap: 6px; }
+    .input-field {
+      width: 100%; background: #1e293b; border: 1px solid #334155; border-radius: 6px;
+      color: #fff; padding: 8px 10px; font-size: 16px; outline: none;
+    }
+    .input-field:focus { border-color: #38bdf8; }
+    .input-my { color: #facc15; }
+
+    /* Floating Action Bar for Step 2 */
+    .floating-bar {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 600px;
+      background: rgba(11, 15, 25, 0.95);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-top: 1px solid #334155;
+      padding: 12px 16px;
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+      display: flex;
+      gap: 12px;
+      z-index: 50;
+    }
+
+    /* Step 3: Output Page */
+    .output-wrapper { flex: 1; display: flex; flex-direction: column; margin-bottom: 16px; }
+    #finalOutput {
+      width: 100%; height: 60vh; background: #1e293b; color: #f8fafc;
+      border: 1px solid #334155; border-radius: 12px; padding: 14px;
+      font-size: 15px; line-height: 1.6; resize: none; outline: none;
+    }
+
+    /* Buttons */
+    .btn {
+      width: 100%; padding: 14px; border: none; border-radius: 10px;
+      font-weight: 600; font-size: 15px; cursor: pointer; transition: 0.2s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: #0284c7; color: white; }
+    .btn-success { background: #16a34a; color: white; flex: 2; }
+    .btn-secondary { background: #334155; color: #f8fafc; flex: 1; }
+    .btn-group { margin-top: 12px; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+      background: #22c55e; color: black; padding: 10px 20px;
+      border-radius: 30px; font-weight: 700; font-size: 14px; display: none; z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- STEP 1: INPUT PAGE -->
+  <div id="step1" class="view-card active">
+    <div class="header">
+      <h2>Lyrics Input</h2>
+      <p>Timestamps ပါသည်ဖြစ်စေ၊ မပါသည်ဖြစ်စေ ထည့်နိုင်ပါသည်</p>
+    </div>
+    <div class="input-wrapper">
+      <textarea id="rawInput" placeholder="Lyrics များကို ဒီနေရာမှာ Paste ချပါ..."></textarea>
+    </div>
+    <button class="btn btn-primary" onclick="handleStep1Submit()">Table ထဲထည့်မည်</button>
+  </div>
+
+  <!-- STEP 2: TABLE EDIT PAGE -->
+  <div id="step2" class="view-card">
+    <div class="header">
+      <h2>Edit Lyrics</h2>
+      <p id="lineCount">စုစုပေါင်း: 0 ကြောင်း</p>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="col-num">#</th>
+            <th>English (အပေါ်) / Myanmar (အောက်)</th>
+          </tr>
+        </thead>
+        <tbody id="lyricsTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Floating Buttons (Back on Left, Done on Right) -->
+    <div class="floating-bar">
+      <button class="btn btn-secondary" onclick="switchView('step1')">Back</button>
+      <button class="btn btn-success" onclick="goToStep3()">Done</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: OUTPUT / COPY PAGE -->
+  <div id="step3" class="view-card">
+    <div class="header">
+      <h2>Formatted Lyrics</h2>
+      <p>အလွယ်တကူ Copy ကူးယူနိုင်ပါပြီ</p>
+    </div>
+    <div class="output-wrapper">
+      <textarea id="finalOutput" readonly></textarea>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-success" style="width: 100%; margin-bottom: 8px;" onclick="copyFinalText()">Copy ကူးမည်</button>
+      <button class="btn btn-secondary" style="width: 100%; margin-bottom: 8px;" onclick="switchView('step2')">Edit စာမျက်နှာသို့ ပြန်ပြင်ရန်</button>
+      <button class="btn btn-secondary" style="width: 100%;" onclick="resetAll()">အသစ်ထပ်ထည့်မည်</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast">Copied to Clipboard!</div>
+
+  <script>
+    let lastParsedRaw = '';
+
+    function switchView(viewId) {
+      document.querySelectorAll('.view-card').forEach(el => el.classList.remove('active'));
+      document.getElementById(viewId).classList.add('active');
+      window.scrollTo(0, 0);
+    }
+
+    function cleanText(text) {
+      if (!text) return '';
+      return text.replace(/\[\d{1,2}:\d{2}(\.\d{1,3})?\]/g, '')
+                 .replace(/<\d{1,2}:\d{2}(\.\d{1,3})?>/g, '')
+                 .trim();
+    }
+
+    function hasMyanmarScript(text) {
+      return /[\u1000-\u109F\uAA60-\uAA7F\uA9E0-\uA9FF]/.test(text);
+    }
+
+    function handleStep1Submit() {
+      const rawText = document.getElementById('rawInput').value.trim();
+      if (!rawText) return;
+
+      const tbody = document.getElementById('lyricsTableBody');
+
+      // အကယ်၍ Back နှိပ်ပြီး ပြန်ဝင်လာချိန်တွင် စာသားအသစ်မပြောင်းထားပါက ပြင်ဆင်ထားသော Table Data ကို မဖျက်ဘဲ မူလအတိုင်း ထိန်းသိမ်းပေးခြင်း
+      if (rawText === lastParsedRaw && tbody.children.length > 0) {
+        switchView('step2');
+        return;
+      }
+
+      lastParsedRaw = rawText;
+      parseAndBuildTable(rawText);
+      switchView('step2');
+    }
+
+    function parseAndBuildTable(rawText) {
+      const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      const tbody = document.getElementById('lyricsTableBody');
+      tbody.innerHTML = '';
+
+      let parsedData = [];
+      let i = 0;
+
+      while (i < lines.length) {
+        let currentLine = lines[i];
+
+        if (currentLine.includes('||')) {
+          let parts = currentLine.split('||');
+          parsedData.push({
+            eng: cleanText(parts[0]),
+            myan: cleanText(parts[1])
+          });
+          i++;
+        } else {
+          let cleanedCurrent = cleanText(currentLine);
+          let nextLine = (i + 1 < lines.length) ? lines[i + 1] : null;
+
+          if (nextLine && !nextLine.includes('||')) {
+            let cleanedNext = cleanText(nextLine);
+
+            if (!hasMyanmarScript(cleanedCurrent) && hasMyanmarScript(cleanedNext)) {
+              parsedData.push({ eng: cleanedCurrent, myan: cleanedNext });
+              i += 2;
+              continue;
+            }
+          }
+
+          if (hasMyanmarScript(cleanedCurrent)) {
+            parsedData.push({ eng: '', myan: cleanedCurrent });
+          } else {
+            parsedData.push({ eng: cleanedCurrent, myan: '' });
+          }
+          i++;
+        }
+      }
+
+      parsedData.forEach((item, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="col-num">${index + 1}</td>
+          <td>
+            <div class="cell-inputs">
+              <input type="text" value="${item.eng}" class="input-field input-eng" placeholder="English text">
+              <input type="text" value="${item.myan}" class="input-field input-my" placeholder="မြန်မာစာသား">
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('lineCount').textContent = `စုစုပေါင်း: ${parsedData.length} ကြောင်း`;
+    }
+
+    function goToStep3() {
+      const rows = document.querySelectorAll('#lyricsTableBody tr');
+      let result = [];
+
+      rows.forEach(row => {
+        const eng = row.querySelector('.input-eng').value.trim();
+        const myan = row.querySelector('.input-my').value.trim();
+
+        if (eng && myan) {
+          result.push(`${eng}\n${myan}`);
+        } else if (eng) {
+          result.push(eng);
+        } else if (myan) {
+          result.push(myan);
+        }
+      });
+
+      const formatted = result.join('\n\n');
+      document.getElementById('finalOutput').value = formatted;
+
+      navigator.clipboard.writeText(formatted).then(() => {
+        showToast("Auto-copied & Formatted!");
+      });
+
+      switchView('step3');
+    }
+
+    function copyFinalText() {
+      const text = document.getElementById('finalOutput').value;
+      navigator.clipboard.writeText(text).then(() => {
+        showToast("Copied to Clipboard!");
+      });
+    }
+
+    function resetAll() {
+      document.getElementById('rawInput').value = '';
+      document.getElementById('lyricsTableBody').innerHTML = '';
+      document.getElementById('finalOutput').value = '';
+      lastParsedRaw = '';
+      switchView('step1');
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 2000);
+    }
+  </script>
+</body>
+</html>
